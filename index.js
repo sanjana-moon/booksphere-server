@@ -26,7 +26,23 @@ async function run() {
         // Connect the client to the server	(optional starting in v4.7)
         // await client.connect();
         // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
+        // await client.db("admin").command({ ping: 1 });
+
+        const db = client.db("booksphere")
+        const bookCollection = db.collection("books")
+        const deliveriesCollection = db.collection("deliveries")
+        const reviewCollection = db.collection("reviews")
+        const paymentCollection = db.collection("payments")
+
+
+        app.post('/api/books', async (req, res) => {
+            const data = req.body;
+            const result = await bookCollection.insertOne({
+                ...data,
+            });
+            res.send(result);
+        })
+
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
