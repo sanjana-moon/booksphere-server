@@ -35,6 +35,14 @@ async function run() {
         const paymentCollection = db.collection("payments")
 
 
+
+        
+        app.get('/api/books/:email', async(req, res) => {
+            const {email} = req.params;
+            const result = await bookCollection.find({librarianEmail: email}).toArray();
+            res.send(result);
+        })
+
         app.post('/api/books', async (req, res) => {
             const data = req.body;
             const result = await bookCollection.insertOne({
@@ -42,6 +50,7 @@ async function run() {
             });
             res.send(result);
         })
+
 
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
