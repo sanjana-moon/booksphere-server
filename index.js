@@ -1,7 +1,7 @@
 const express = require('express');
 const dotenv = require("dotenv")
 const cors = require("cors")
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 dotenv.config()
 const app = express();
 const port = process.env.PORT;
@@ -36,10 +36,10 @@ async function run() {
 
 
 
-        
-        app.get('/api/books/:email', async(req, res) => {
-            const {email} = req.params;
-            const result = await bookCollection.find({librarianEmail: email}).toArray();
+
+        app.get('/api/books/:email', async (req, res) => {
+            const { email } = req.params;
+            const result = await bookCollection.find({ librarianEmail: email }).toArray();
             res.send(result);
         })
 
@@ -49,6 +49,21 @@ async function run() {
                 ...data,
             });
             res.send(result);
+        })
+
+        app.patch('/api/books/:id', async (req, res) => {
+            const { id } = req.params;
+
+            const updatedData = req.body;
+            const result = await bookCollection.updateOne(
+                { _id: new ObjectId(id) },
+                {
+                    $set: {
+                        ...updatedData
+                    }
+                }
+            )
+            res.send(result)
         })
 
 
