@@ -37,6 +37,13 @@ async function run() {
 
 
 
+
+        app.get('/api/books', async (req, res) => {
+            const cursor = bookCollection.find();
+            const result = await cursor.toArray();
+            res.send(result)
+        })
+
         app.get('/api/books/:email', async (req, res) => {
             const { email } = req.params;
             const result = await bookCollection.find({ librarianEmail: email }).toArray();
