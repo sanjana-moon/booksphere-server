@@ -39,8 +39,82 @@ async function run() {
 
 
         app.get('/api/books', async (req, res) => {
-            const cursor = bookCollection.find();
-            const result = await cursor.toArray();
+            try {
+                const {
+                    search = "",
+                    category,
+                    sort
+                } = req.query;
+
+               const query = {
+  approvalStatus: { $in: ["approved", "pending"] }
+};
+
+                // Search by title or author
+                if (search) {
+                    query.$or = [
+                        {
+                            title: {
+                                $regex: search,
+                                $options: "i"
+                            }
+                        },
+                        {
+                            author: {
+                                $regex: search,
+                                $options: "i"
+                            }
+                        }
+                    ];
+                }
+
+                // Category filter
+                if (category && category !== "all") {
+                    query.category = category;
+                }
+
+                let sortOption = {};
+
+                switch (sort) {
+                    case "title":
+                        sortOption = { title: 1 };
+                        break;
+
+                    case "fee-low":
+                        sortOption = { deliveryFee: 1 };
+                        break;
+
+                    case "fee-high":
+                        sortOption = { deliveryFee: -1 };
+                        break;
+
+                    case "newest":
+                        sortOption = { createdAt: -1 };
+                        break;
+
+                    default:
+                        sortOption = {};
+                }
+
+                const result = await bookCollection
+                    .find(query)
+                    .sort(sortOption)
+                    .toArray();
+
+                res.send(result);
+
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({
+                    message: "Failed to fetch books"
+                });
+            }
+        });
+
+        app.get('/api/single-book/:id', async (req, res) => {
+            const { id } = req.params;
+            const query = { _id: new ObjectId(id) };
+            const result = await bookCollection.findOne(query)
             res.send(result)
         })
 
@@ -52,11 +126,15 @@ async function run() {
 
         app.post('/api/books', async (req, res) => {
             const data = req.body;
+
             const result = await bookCollection.insertOne({
                 ...data,
+                approvalStatus: "pending",
+                createdAt: new Date()
             });
+
             res.send(result);
-        })
+        });
 
         app.patch('/api/books/:id', async (req, res) => {
             const { id } = req.params;
