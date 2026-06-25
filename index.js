@@ -157,7 +157,95 @@ async function run() {
             res.send(result);
         })
 
-        
+        app.get("/api/librarian-stats/:email", async (req, res) => {
+            try {
+                const { email } = req.params;
+
+                // All books added by this librarian
+                const books = await bookCollection
+                    .find({ librarianEmail: email })
+                    .toArray();
+
+                const totalBooks = books.length;
+
+                // Get all book ids
+                const bookIds = books.map(book => book._id.toString());
+
+                // All deliveries related to those books
+                const deliveries = await deliveriesCollection
+                    .find({
+                        bookId: { $in: bookIds }
+                    })
+                    .toArray();
+
+                // Pending requests
+                const pendingRequests = deliveries.filter(
+                    delivery => delivery.deliveryStatus === "Pending"
+                ).length;
+
+                // Total earnings
+                const totalEarnings = deliveries.reduce(
+                    (total, delivery) =>
+                        total + Number(delivery.amount || 0),
+                    0
+                );
+
+                // Most requested books
+                const popularBooks = books
+                    .sort(
+                        (a, b) =>
+                            (b.requestCount || 0) -
+                            (a.requestCount || 0)
+                    )
+                    .slice(0, 5)
+                    .map(book => ({
+                        title: book.title,
+                        requests: book.requestCount || 0,
+                    }));
+
+                // Earnings chart
+                const monthlyEarnings = {};
+
+                deliveries.forEach((delivery) => {
+                    const date = new Date(
+                        delivery.requestedAt || delivery.createdAt
+                    );
+
+                    const month = date.toLocaleString("default", {
+                        month: "short",
+                    });
+
+                    if (!monthlyEarnings[month]) {
+                        monthlyEarnings[month] = 0;
+                    }
+
+                    monthlyEarnings[month] += Number(
+                        delivery.amount || 0
+                    );
+                });
+
+                const earningsChart = Object.entries(
+                    monthlyEarnings
+                ).map(([month, earnings]) => ({
+                    month,
+                    earnings,
+                }));
+
+                res.send({
+                    totalBooks,
+                    totalEarnings,
+                    pendingRequests,
+                    popularBooks,
+                    earningsChart,
+                });
+            } catch (error) {
+                console.error(error);
+
+                res.status(500).send({
+                    message: "Failed to load dashboard stats",
+                });
+            }
+        });
 
         app.post('/api/books/delivery', async (req, res) => {
             const {
@@ -171,8 +259,8 @@ async function run() {
                 paymentStatus,
             } = req.body;
 
-            
-            
+
+
             const existingPayment = await paymentCollection.findOne({
                 transactionId,
             });
@@ -194,7 +282,7 @@ async function run() {
                 deliveryStatus: "Pending",
                 requestedAt: new Date(),
             };
-            
+
             console.log('deliveryData', deliveryData);
 
             const deliveryResult =
