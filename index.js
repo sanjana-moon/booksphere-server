@@ -46,9 +46,9 @@ async function run() {
                     sort
                 } = req.query;
 
-               const query = {
-  approvalStatus: { $in: ["approved", "pending"] }
-};
+                const query = {
+                    approvalStatus: { $in: ["approved", "pending"] }
+                };
 
                 // Search by title or author
                 if (search) {
@@ -156,6 +156,80 @@ async function run() {
             const result = await bookCollection.deleteOne({ _id: new ObjectId(id) });
             res.send(result);
         })
+
+        
+
+        app.post('/api/books/delivery', async (req, res) => {
+            const {
+                bookId,
+                bookTitle,
+                quantity,
+                email,
+                amount,
+                paymentType,
+                transactionId,
+                paymentStatus,
+            } = req.body;
+
+            
+            
+            const existingPayment = await paymentCollection.findOne({
+                transactionId,
+            });
+
+            if (existingPayment) {
+                return res.status(200).send({
+                    message: "Already processed",
+                });
+            }
+
+            const deliveryData = {
+                bookId,
+                bookTitle,
+                readerEmail: email,
+                quantity,
+                amount,
+                transactionId,
+                paymentStatus,
+                deliveryStatus: "Pending",
+                requestedAt: new Date(),
+            };
+            
+            console.log('deliveryData', deliveryData);
+
+            const deliveryResult =
+                await deliveriesCollection.insertOne(deliveryData);
+
+            await bookCollection.updateOne(
+                { _id: new ObjectId(bookId) },
+                {
+                    $inc: {
+                        requestCount: quantity,
+                    },
+                }
+            );
+
+            const paymentData = {
+                userEmail: email,
+                amount,
+                transactionId,
+                paymentStatus,
+                paymentType,
+                bookId,
+                bookTitle,
+                paidAt: new Date(),
+            };
+
+            await paymentCollection.insertOne(paymentData);
+
+            res.send(deliveryResult);
+        });
+
+        // app.get('/api/books/:email', async (req, res) => {
+        //     const { email } = req.params;
+        //     const result = await bookCollection.find({ userEmail: email }).toArray();
+        //     res.send(result);
+        // })
 
 
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
