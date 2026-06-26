@@ -248,6 +248,85 @@ async function run() {
             }
         });
 
+        app.get("/api/librarian/deliveries/:email", async (req, res) => {
+            try {
+                const { email } = req.params;
+
+                const books = await bookCollection
+                    .find({ librarianEmail: email })
+                    .toArray();
+
+                const bookIds = books.map(book => book._id.toString());
+
+                const deliveries = await deliveriesCollection
+                    .find({
+                        bookId: { $in: bookIds },
+                    })
+                    .sort({
+                        requestedAt: -1,
+                    })
+                    .toArray();
+
+                res.send(deliveries);
+            } catch (err) {
+                res.status(500).send({
+                    message: "Failed to fetch deliveries",
+                });
+            }
+        });
+
+        app.patch("/api/librarian/deliveries/:id", async (req, res) => {
+            try {
+                const { id } = req.params;
+
+                const delivery = await deliveriesCollection.findOne({
+                    _id: new ObjectId(id),
+                });
+
+                if (!delivery) {
+                    return res.status(404).send({
+                        message: "Delivery not found",
+                    });
+                }
+
+                let nextStatus = "Pending";
+
+                switch (delivery.deliveryStatus) {
+                    case "Pending":
+                        nextStatus = "Dispatched";
+                        break;
+
+                    case "Dispatched":
+                        nextStatus = "Delivered";
+                        break;
+
+                    case "Delivered":
+                        nextStatus = "Delivered";
+                        break;
+                }
+
+                await deliveriesCollection.updateOne(
+                    {
+                        _id: new ObjectId(id),
+                    },
+                    {
+                        $set: {
+                            deliveryStatus: nextStatus,
+                        },
+                    }
+                );
+
+                res.send({
+                    success: true,
+                    deliveryStatus: nextStatus,
+                });
+            } catch (err) {
+                res.status(500).send({
+                    message: "Failed to update delivery",
+                });
+            }
+        });
+
         app.post('/api/books/delivery', async (req, res) => {
             const {
                 bookId,
@@ -273,6 +352,7 @@ async function run() {
                 bookId,
                 bookTitle,
                 readerEmail: email,
+                readerName,
                 quantity,
                 amount,
                 transactionId,
