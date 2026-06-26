@@ -442,6 +442,47 @@ async function run() {
             res.send(result)
         });
 
+        app.patch("/api/admin/books/:id/publish", async (req, res) => {
+            try {
+                const { id } = req.params;
+
+                const book = await bookCollection.findOne({
+                    _id: new ObjectId(id),
+                });
+
+                if (!book) {
+                    return res.status(404).send({
+                        message: "Book not found.",
+                    });
+                }
+
+                const newStatus =
+                    book.publishStatus === "published"
+                        ? "unpublished"
+                        : "published";
+
+                await bookCollection.updateOne(
+                    {
+                        _id: new ObjectId(id),
+                    },
+                    {
+                        $set: {
+                            publishStatus: newStatus,
+                        },
+                    }
+                );
+
+                res.send({
+                    success: true,
+                    publishStatus: newStatus,
+                });
+            } catch (err) {
+                res.status(500).send({
+                    message: "Failed to update publish status.",
+                });
+            }
+        });
+
 
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
