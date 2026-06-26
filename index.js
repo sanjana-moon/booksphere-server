@@ -580,6 +580,56 @@ async function run() {
             }
         });
 
+        app.get("/api/admin/dashboard", async (req, res) => {
+            try {
+                const totalUsers = await usersCollection.countDocuments({
+                    role: { $ne: "admin" },
+                });
+
+                const totalBooks = await bookCollection.countDocuments();
+
+                const totalDeliveries =
+                    await deliveriesCollection.countDocuments();
+
+                const payments = await paymentCollection.find().toArray();
+
+                const totalRevenue = payments.reduce(
+                    (sum, item) => sum + Number(item.amount || 0),
+                    0
+                );
+
+                const categoryStats = await bookCollection
+                    .aggregate([
+                        {
+                            $group: {
+                                _id: "$category",
+                                value: { $sum: 1 },
+                            },
+                        },
+                    ])
+                    .toArray();
+
+                const booksByCategory = categoryStats.map((item) => ({
+                    category: item._id,
+                    value: item.value,
+                }));
+
+                res.send({
+                    totalUsers,
+                    totalBooks,
+                    totalDeliveries,
+                    totalRevenue,
+                    booksByCategory,
+                });
+            } catch (err) {
+                console.error(err);
+
+                res.status(500).send({
+                    message: "Failed to load dashboard",
+                });
+            }
+        });
+
 
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
