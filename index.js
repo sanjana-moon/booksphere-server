@@ -545,6 +545,41 @@ async function run() {
             }
         });
 
+        app.get("/api/admin/transactions", async (req, res) => {
+            try {
+                const payments = await paymentCollection
+                    .find()
+                    .sort({ paidAt: -1 })
+                    .toArray();
+
+                const transactions = await Promise.all(
+                    payments.map(async (payment) => {
+                        const book = await bookCollection.findOne({
+                            _id: new ObjectId(payment.bookId),
+                        });
+
+                        return {
+                            _id: payment._id,
+                            transactionId: payment.transactionId,
+                            userEmail: payment.userEmail,
+                            librarianEmail:
+                                book?.librarianEmail || "N/A",
+                            amount: payment.amount,
+                            paidAt: payment.paidAt,
+                        };
+                    })
+                );
+
+                res.send(transactions);
+            } catch (err) {
+                console.error(err);
+
+                res.status(500).send({
+                    message: "Failed to fetch transactions",
+                });
+            }
+        });
+
 
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
