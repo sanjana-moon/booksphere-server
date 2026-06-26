@@ -47,7 +47,7 @@ async function run() {
                 } = req.query;
 
                 const query = {
-                    approvalStatus: { $in: ["approved", "pending"] }
+                    approvalStatus: { $in: ["approved"] }
                 };
 
                 // Search by title or author
@@ -259,8 +259,6 @@ async function run() {
                 paymentStatus,
             } = req.body;
 
-
-
             const existingPayment = await paymentCollection.findOne({
                 transactionId,
             });
@@ -270,7 +268,6 @@ async function run() {
                     message: "Already processed",
                 });
             }
-
             const deliveryData = {
                 bookId,
                 bookTitle,
@@ -313,11 +310,137 @@ async function run() {
             res.send(deliveryResult);
         });
 
-        // app.get('/api/books/:email', async (req, res) => {
-        //     const { email } = req.params;
-        //     const result = await bookCollection.find({ userEmail: email }).toArray();
-        //     res.send(result);
-        // })
+        app.get("/api/books/deliveries/:email", async (req, res) => {
+            const { email } = req.params;
+
+            const result = await deliveriesCollection
+                .find({
+                    readerEmail: email,
+                })
+                .sort({
+                    requestedAt: -1,
+                })
+                .toArray();
+
+            res.send(result);
+        });
+
+        app.get("/api/user-stats/:email", async (req, res) => {
+            try {
+                const { email } = req.params;
+
+                const deliveries = await deliveriesCollection
+                    .find({
+                        readerEmail: email,
+                    })
+                    .toArray();
+
+                const totalBooksRead = deliveries.reduce(
+                    (sum, item) => sum + Number(item.quantity || 0),
+                    0
+                );
+
+                const pendingDeliveries = deliveries.filter(
+                    (item) => item.deliveryStatus === "Pending"
+                ).length;
+
+                const totalSpent = deliveries.reduce(
+                    (sum, item) => sum + Number(item.amount || 0),
+                    0
+                );
+
+                const chartData = [
+                    {
+                        metric: "Books",
+                        value: totalBooksRead,
+                    },
+                    {
+                        metric: "Pending",
+                        value: pendingDeliveries,
+                    },
+                    {
+                        metric: "Spent",
+                        value: totalSpent,
+                    },
+                ];
+
+                const recentDeliveries = deliveries
+                    .sort(
+                        (a, b) =>
+                            new Date(b.requestedAt) -
+                            new Date(a.requestedAt)
+                    )
+                    .slice(0, 5);
+
+                res.send({
+                    totalBooksRead,
+                    pendingDeliveries,
+                    totalSpent,
+                    chartData,
+                    recentDeliveries,
+                });
+            } catch (error) {
+                res.status(500).send({
+                    message: "Failed to load user dashboard.",
+                });
+            }
+        });
+
+        app.get("/api/admin/pending-books", async (req, res) => {
+            try {
+                const books = await bookCollection
+                    .find({
+                        approvalStatus: "pending",
+                    })
+                    .sort({
+                        createdAt: -1,
+                    })
+                    .toArray();
+
+                res.send(books);
+            } catch (err) {
+                res.status(500).send({
+                    message: "Failed to fetch pending books.",
+                });
+            }
+        });
+
+
+        app.get('/api/admin/books', async (req, res) => {
+            try {
+                const { status } = req.query;
+
+                const query = {};
+
+                if (status && status !== "all") {
+                    query.approvalStatus = status;
+                }
+
+                const result = await bookCollection
+                    .find(query)
+                    .sort({ createdAt: -1 })
+                    .toArray();
+
+                res.send(result);
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({ message: "Failed to fetch books" });
+            }
+        });
+
+        app.patch('/api/admin/books/:id', async (req, res) => {
+            const id = req.params.id;
+            const updatedBooks = req.body;
+            const filter = { _id: new ObjectId(id) }
+            const updatedDoc = {
+                $set: {
+                    approvalStatus: "approved",
+                    publishStatus: "published",
+                },
+            };
+            const result = await bookCollection.updateOne(filter, updatedDoc);
+            res.send(result)
+        });
 
 
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
