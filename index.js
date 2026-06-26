@@ -33,6 +33,7 @@ async function run() {
         const deliveriesCollection = db.collection("deliveries")
         const reviewCollection = db.collection("reviews")
         const paymentCollection = db.collection("payments")
+        const usersCollection = db.collection("user");
 
 
 
@@ -479,6 +480,67 @@ async function run() {
             } catch (err) {
                 res.status(500).send({
                     message: "Failed to update publish status.",
+                });
+            }
+        });
+
+        app.get("/api/admin/users", async (req, res) => {
+            try {
+                const users = await usersCollection
+                    .find({
+                        role: { $ne: "admin" }, // Exclude admins
+                    })
+                    .sort({ name: 1 })
+                    .toArray();
+
+                res.send(users);
+            } catch (err) {
+                res.status(500).send({
+                    message: "Failed to fetch users",
+                });
+            }
+        });
+
+        app.patch("/api/admin/users/:id/role", async (req, res) => {
+            try {
+                const { id } = req.params;
+                const { role } = req.body;
+
+                await usersCollection.updateOne(
+                    {
+                        _id: new ObjectId(id),
+                    },
+                    {
+                        $set: {
+                            role,
+                        },
+                    }
+                );
+
+                res.send({
+                    success: true,
+                });
+            } catch (err) {
+                res.status(500).send({
+                    message: "Failed to update role",
+                });
+            }
+        });
+
+        app.delete("/api/admin/users/:id", async (req, res) => {
+            try {
+                const { id } = req.params;
+
+                await usersCollection.deleteOne({
+                    _id: new ObjectId(id),
+                });
+
+                res.send({
+                    success: true,
+                });
+            } catch (err) {
+                res.status(500).send({
+                    message: "Failed to delete user",
                 });
             }
         });
