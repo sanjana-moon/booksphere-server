@@ -404,7 +404,7 @@ async function run() {
             console.log(result);
 
             res.send(result);
-        });        
+        });
 
         app.get("/api/user-stats/:email", async (req, res) => {
             try {
@@ -467,6 +467,196 @@ async function run() {
             }
         });
 
+        app.get("/api/user/reading-list/:email", async (req, res) => {
+            try {
+                const { email } = req.params;
+
+                const deliveries = await deliveriesCollection
+                    .find({
+                        readerEmail: email,
+                        deliveryStatus: {
+                            $in: ["Delivered", "Returned"],
+                        },
+                    })
+                    .toArray();
+
+                const bookIds = deliveries.map(
+                    (item) => new ObjectId(item.bookId)
+                );
+
+                const books = await bookCollection
+                    .find({
+                        _id: {
+                            $in: bookIds,
+                        },
+                    })
+                    .toArray();
+
+                const readingList = books.map((book) => {
+                    const delivery = deliveries.find(
+                        (d) => d.bookId === book._id.toString()
+                    );
+
+                    return {
+                        ...book,
+                        deliveredAt: delivery?.requestedAt,
+                        quantity: delivery?.quantity,
+                    };
+                });
+
+                res.send(readingList);
+            } catch (err) {
+                res.status(500).send({
+                    message: "Failed to load reading list.",
+                });
+            }
+        });
+
+        app.post("/api/books/review", async (req, res) => {
+            try {
+                const {
+                    bookId,
+                    bookTitle,
+                    userEmail,
+                    userName,
+                    rating,
+                    comment,
+                } = req.body;
+
+                // Verify delivery
+                const delivery = await deliveriesCollection.findOne({
+                    readerEmail: userEmail,
+                    bookId,
+                    deliveryStatus: "Delivered",
+                });
+
+                if (!delivery) {
+                    return res.status(403).send({
+                        message:
+                            "Only users who received the book can review it.",
+                    });
+                }
+
+                // Prevent duplicate review
+                const existing = await reviewCollection.findOne({
+                    userEmail,
+                    bookId,
+                });
+
+                if (existing) {
+                    return res.status(400).send({
+                        message: "You already reviewed this book.",
+                    });
+                }
+
+                const result = await reviewCollection.insertOne({
+                    bookId,
+                    bookTitle,
+                    userEmail,
+                    userName,
+                    rating,
+                    comment,
+                    createdAt: new Date(),
+                });
+
+                res.send(result);
+            } catch (err) {
+                res.status(500).send({
+                    message: "Failed to add review.",
+                });
+            }
+        });
+
+        app.get("/api/user/reviews/:email", async (req, res) => {
+            try {
+                const reviews = await reviewCollection
+                    .find({
+                        userEmail: req.params.email,
+                    })
+                    .sort({
+                        createdAt: -1,
+                    })
+                    .toArray();
+
+                res.send(reviews);
+            } catch (err) {
+                res.status(500).send({
+                    message: "Failed to load reviews.",
+                });
+            }
+        });
+
+        app.patch("/api/reviews/:id", async (req, res) => {
+            const { id } = req.params;
+            const { rating, comment } = req.body;
+
+            const result = await reviewCollection.updateOne(
+                {
+                    _id: new ObjectId(id),
+                },
+                {
+                    $set: {
+                        rating,
+                        comment,
+                    },
+                }
+            );
+
+            res.send(result);
+        });
+
+        app.delete("/api/reviews/:id", async (req, res) => {
+            const result = await reviewCollection.deleteOne({
+                _id: new ObjectId(req.params.id),
+            });
+
+            res.send(result);
+        });
+
+        app.get("/api/books/:bookId/reviews", async (req, res) => {
+            try {
+                const { bookId } = req.params;
+
+                const reviews = await reviewCollection
+                    .find({ bookId })
+                    .sort({ createdAt: -1 })
+                    .toArray();
+
+                res.send(reviews);
+            } catch (err) {
+                res.status(500).send({
+                    message: "Failed to fetch reviews.",
+                });
+            }
+        });
+
+        app.get("/api/books/:bookId/can-review/:email", async (req, res) => {
+            try {
+                const { bookId, email } = req.params;
+
+                const delivered = await deliveriesCollection.findOne({
+                    readerEmail: email,
+                    bookId,
+                    deliveryStatus: "Delivered",
+                });
+
+                const alreadyReviewed = await reviewCollection.findOne({
+                    userEmail: email,
+                    bookId,
+                });
+
+                res.send({
+                    canReview: !!delivered && !alreadyReviewed,
+                });
+            } catch (err) {
+                res.status(500).send({
+                    message: "Failed",
+                });
+            }
+        });
+
+
+
         app.get("/api/admin/pending-books", async (req, res) => {
             try {
                 const books = await bookCollection
@@ -485,7 +675,6 @@ async function run() {
                 });
             }
         });
-
 
         app.get('/api/admin/books', async (req, res) => {
             try {
