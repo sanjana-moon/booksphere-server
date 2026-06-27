@@ -352,7 +352,6 @@ async function run() {
                 bookId,
                 bookTitle,
                 readerEmail: email,
-                readerName,
                 quantity,
                 amount,
                 transactionId,
@@ -394,17 +393,18 @@ async function run() {
         app.get("/api/books/deliveries/:email", async (req, res) => {
             const { email } = req.params;
 
+            console.log("Email:", email);
+
             const result = await deliveriesCollection
                 .find({
                     readerEmail: email,
                 })
-                .sort({
-                    requestedAt: -1,
-                })
                 .toArray();
 
+            console.log(result);
+
             res.send(result);
-        });
+        });        
 
         app.get("/api/user-stats/:email", async (req, res) => {
             try {
