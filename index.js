@@ -2,6 +2,7 @@ const express = require('express');
 const dotenv = require("dotenv")
 const cors = require("cors")
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const { createRemoteJWKSet, jwtVerify } = require("jose-cjs");
 dotenv.config()
 const app = express();
 const port = process.env.PORT;
@@ -21,6 +22,35 @@ const client = new MongoClient(uri, {
     }
 });
 
+const JWKS = createRemoteJWKSet(new URL(`${process.env.CLIENT_URL}/api/auth/jwks`))
+
+const verifyToken = async (req, res, next) => {
+    const authHeader = req?.headers.authorization
+    console.log(authHeader);
+
+    if (!authHeader) {
+        return res.status(401).json({ message: "Unauthorized" })
+    }
+    const token = authHeader.split(" ")[1]
+    console.log(token, "token from verify token");
+
+    if (!token) {
+        return res.status(401).json({ message: "Unauthorized" })
+    }
+    try {
+        const { payload } = await jwtVerify(token, JWKS)
+        console.log("payload", payload);
+
+        req.user = payload
+
+        next()
+    } catch (error) {
+        console.log(error, "error");
+
+        return res.status(403).json({ message: "Forbidden" })
+    }
+}
+
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
@@ -36,40 +66,40 @@ async function run() {
         const usersCollection = db.collection("user");
 
 
-
-
-
-        app.get('/api/books', async (req, res) => {
+        app.get("/api/books", async (req, res) => {
             try {
                 const {
                     search = "",
                     category,
-                    sort
+                    sort,
+                    page = 1,
+                    limit = 9,
                 } = req.query;
 
+                const currentPage = Number(page);
+                const pageSize = Number(limit);
+
                 const query = {
-                    approvalStatus: { $in: ["approved"] }
+                    approvalStatus: "approved",
                 };
 
-                // Search by title or author
                 if (search) {
                     query.$or = [
                         {
                             title: {
                                 $regex: search,
-                                $options: "i"
-                            }
+                                $options: "i",
+                            },
                         },
                         {
                             author: {
                                 $regex: search,
-                                $options: "i"
-                            }
-                        }
+                                $options: "i",
+                            },
+                        },
                     ];
                 }
 
-                // Category filter
                 if (category && category !== "all") {
                     query.category = category;
                 }
@@ -92,22 +122,28 @@ async function run() {
                     case "newest":
                         sortOption = { createdAt: -1 };
                         break;
-
-                    default:
-                        sortOption = {};
                 }
 
-                const result = await bookCollection
+                const totalBooks =
+                    await bookCollection.countDocuments(query);
+
+                const books = await bookCollection
                     .find(query)
                     .sort(sortOption)
+                    .skip((currentPage - 1) * pageSize)
+                    .limit(pageSize)
                     .toArray();
 
-                res.send(result);
+                res.send({
+                    books,
+                    totalBooks,
+                    currentPage,
+                    totalPages: Math.ceil(totalBooks / pageSize),
+                });
 
             } catch (error) {
-                console.error(error);
                 res.status(500).send({
-                    message: "Failed to fetch books"
+                    message: "Failed to fetch books",
                 });
             }
         });
@@ -125,8 +161,10 @@ async function run() {
             res.send(result);
         })
 
-        app.post('/api/books', async (req, res) => {
+        app.post('/api/books', verifyToken, async (req, res) => {
             const data = req.body;
+            console.log('data', data);
+
 
             const result = await bookCollection.insertOne({
                 ...data,
@@ -137,7 +175,7 @@ async function run() {
             res.send(result);
         });
 
-        app.patch('/api/books/:id', async (req, res) => {
+        app.patch('/api/books/:id', verifyToken, async (req, res) => {
             const { id } = req.params;
 
             const updatedData = req.body;
@@ -152,7 +190,7 @@ async function run() {
             res.send(result)
         })
 
-        app.delete('/api/books/:id', async (req, res) => {
+        app.delete('/api/books/:id', verifyToken, async (req, res) => {
             const { id } = req.params;
             const result = await bookCollection.deleteOne({ _id: new ObjectId(id) });
             res.send(result);
@@ -162,7 +200,6 @@ async function run() {
             try {
                 const { email } = req.params;
 
-                // All books added by this librarian
                 const books = await bookCollection
                     .find({ librarianEmail: email })
                     .toArray();
@@ -248,7 +285,7 @@ async function run() {
             }
         });
 
-        app.get("/api/librarian/deliveries/:email", async (req, res) => {
+        app.get("/api/librarian/deliveries/:email", verifyToken, async (req, res) => {
             try {
                 const { email } = req.params;
 
@@ -275,7 +312,7 @@ async function run() {
             }
         });
 
-        app.patch("/api/librarian/deliveries/:id", async (req, res) => {
+        app.patch("/api/librarian/deliveries/:id", verifyToken, async (req, res) => {
             try {
                 const { id } = req.params;
 
