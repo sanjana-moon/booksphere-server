@@ -365,7 +365,7 @@ async function run() {
             }
         });
 
-        app.post('/api/books/delivery', async (req, res) => {
+        app.post('/api/books/delivery', verifyToken, async (req, res) => {
             const {
                 bookId,
                 bookTitle,
@@ -550,7 +550,7 @@ async function run() {
             }
         });
 
-        app.post("/api/books/review", async (req, res) => {
+        app.post("/api/books/review", verifyToken, async (req, res) => {
             try {
                 const {
                     bookId,
@@ -624,7 +624,7 @@ async function run() {
             }
         });
 
-        app.patch("/api/reviews/:id", async (req, res) => {
+        app.patch("/api/reviews/:id", verifyToken, async (req, res) => {
             const { id } = req.params;
             const { rating, comment } = req.body;
 
@@ -643,7 +643,7 @@ async function run() {
             res.send(result);
         });
 
-        app.delete("/api/reviews/:id", async (req, res) => {
+        app.delete("/api/reviews/:id", verifyToken, async (req, res) => {
             const result = await reviewCollection.deleteOne({
                 _id: new ObjectId(req.params.id),
             });
@@ -693,8 +693,6 @@ async function run() {
             }
         });
 
-
-
         app.get("/api/admin/pending-books", async (req, res) => {
             try {
                 const books = await bookCollection
@@ -736,58 +734,40 @@ async function run() {
             }
         });
 
-        app.patch('/api/admin/books/:id', async (req, res) => {
+        app.patch('/api/admin/books/:id', verifyToken, async (req, res) => {
             const id = req.params.id;
-            const updatedBooks = req.body;
-            const filter = { _id: new ObjectId(id) }
+            const { approvalStatus } = req.body;
+
+            if (!approvalStatus) {
+                return res.status(400).send({ message: "approvalStatus is required" });
+            }
+
+            const filter = { _id: new ObjectId(id) };
             const updatedDoc = {
-                $set: {
-                    approvalStatus: "approved",
-                    publishStatus: "published",
-                },
+                $set: { approvalStatus },
             };
+
             const result = await bookCollection.updateOne(filter, updatedDoc);
-            res.send(result)
+            res.send(result);
         });
 
         app.patch("/api/admin/books/:id/publish", async (req, res) => {
             try {
                 const { id } = req.params;
+                const { publishStatus } = req.body;
 
-                const book = await bookCollection.findOne({
-                    _id: new ObjectId(id),
-                });
-
-                if (!book) {
-                    return res.status(404).send({
-                        message: "Book not found.",
-                    });
+                if (!publishStatus) {
+                    return res.status(400).send({ message: "publishStatus is required" });
                 }
 
-                const newStatus =
-                    book.publishStatus === "published"
-                        ? "unpublished"
-                        : "published";
-
-                await bookCollection.updateOne(
-                    {
-                        _id: new ObjectId(id),
-                    },
-                    {
-                        $set: {
-                            publishStatus: newStatus,
-                        },
-                    }
+                const result = await bookCollection.updateOne(
+                    { _id: new ObjectId(id) },
+                    { $set: { publishStatus } }
                 );
 
-                res.send({
-                    success: true,
-                    publishStatus: newStatus,
-                });
+                res.send({ success: true, publishStatus });
             } catch (err) {
-                res.status(500).send({
-                    message: "Failed to update publish status.",
-                });
+                res.status(500).send({ message: "Failed to update publish status." });
             }
         });
 
@@ -808,7 +788,7 @@ async function run() {
             }
         });
 
-        app.patch("/api/admin/users/:id/role", async (req, res) => {
+        app.patch("/api/admin/users/:id/role", verifyToken, async (req, res) => {
             try {
                 const { id } = req.params;
                 const { role } = req.body;
@@ -834,7 +814,7 @@ async function run() {
             }
         });
 
-        app.delete("/api/admin/users/:id", async (req, res) => {
+        app.delete("/api/admin/users/:id", verifyToken, async (req, res) => {
             try {
                 const { id } = req.params;
 
