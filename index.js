@@ -41,8 +41,7 @@ const verifyToken = async (req, res, next) => {
         const { payload } = await jwtVerify(token, JWKS)
         console.log("payload", payload);
 
-        req.user = payload
-
+        // req.user = payload
         next()
     } catch (error) {
         console.log(error, "error");
@@ -179,14 +178,16 @@ async function run() {
             const { id } = req.params;
 
             const updatedData = req.body;
+
             const result = await bookCollection.updateOne(
                 { _id: new ObjectId(id) },
                 {
                     $set: {
-                        ...updatedData
+                        ...updatedData,
+                        deliveryFee: Number(updatedData.deliveryFee),
                     }
                 }
-            )
+            );
             res.send(result)
         })
 
